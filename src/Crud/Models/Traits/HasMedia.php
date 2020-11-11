@@ -10,14 +10,14 @@ use Spatie\MediaLibrary\MediaCollections\Models\Media as SpatieMedia;
 trait HasMedia
 {
     use InteractsWithMedia;
-
+    
     /**
      * Media conversions group.
      *
      * @var string
      */
     public $mediaconversions = 'default';
-
+    
     /**
      * Media relation.
      *
@@ -28,7 +28,7 @@ trait HasMedia
         // Using Lit media model.
         return $this->morphMany(Media::class, 'model');
     }
-
+    
     /**
      * Register media conversions.
      *
@@ -40,10 +40,11 @@ trait HasMedia
     {
         foreach (config('lit.mediaconversions.default') as $key => $value) {
             $this->addMediaConversion($key)
-                ->keepOriginalImageFormat()
-                ->width($value[0])
-                ->height($value[1])
-                ->sharpen($value[2]);
+                 ->keepOriginalImageFormat()
+                 ->withResponsiveImages()
+                 ->width($value[0])
+                 ->height($value[1])
+                 ->sharpen($value[2]);
         }
     }
 }

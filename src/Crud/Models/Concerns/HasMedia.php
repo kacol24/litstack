@@ -17,10 +17,11 @@ trait HasMedia
     {
         foreach (config('lit.mediaconversions.default') as $key => $value) {
             $this->addMediaConversion($key)
-                ->keepOriginalImageFormat()
-                ->width($value[0])
-                ->height($value[1])
-                ->sharpen($value[2]);
+                 ->keepOriginalImageFormat()
+                 ->withResponsiveImages()
+                 ->width($value[0])
+                 ->height($value[1])
+                 ->sharpen($value[2]);
         }
     }
 }
