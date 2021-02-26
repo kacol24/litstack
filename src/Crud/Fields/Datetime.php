@@ -37,6 +37,7 @@ class Datetime extends BaseField
         $this->formatted('l');
         $this->inline(false);
         $this->onlyDate(true);
+        $this->minuteInterval(5);
     }
 
     /**
@@ -127,5 +128,44 @@ class Datetime extends BaseField
         }
 
         return new Carbon($value);
+    }
+
+    /**
+     * Align datepicker on right.
+     *
+     * @param  bool  $right
+     * @return $this
+     */
+    public function right(bool $right = true)
+    {
+        $this->setAttribute('right', $right);
+
+        return $this;
+    }
+
+    /**
+     * Set timepicker minute interval.
+     *
+     * @param  int   $interval
+     * @return $this
+     */
+    public function minuteInterval(int $interval = 1)
+    {
+        $this->setAttribute('minute_interval', $interval);
+
+        return $this;
+    }
+
+    /**
+     * Set disabled hours option.
+     *
+     * @param  int   $disabledHours
+     * @return $this
+     */
+    public function disabledHours(array $disabledHours = [])
+    {
+        $this->setAttribute('disabled_hours', $disabledHours);
+
+        return $this;
     }
 }

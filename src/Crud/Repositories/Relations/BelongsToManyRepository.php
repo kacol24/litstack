@@ -4,10 +4,10 @@ namespace Ignite\Crud\Repositories\Relations;
 
 use Ignite\Crud\Fields\Relations\BelongsTo;
 use Ignite\Crud\Fields\Relations\BelongsToMany;
-use Ignite\Crud\Repositories\BaseFieldRepository;
 use Ignite\Crud\Requests\CrudUpdateRequest;
+use Illuminate\Database\Eloquent\Model;
 
-class BelongsToManyRepository extends BaseFieldRepository
+class BelongsToManyRepository extends RelationRepository
 {
     use Concerns\ManagesRelated;
 
@@ -40,6 +40,18 @@ class BelongsToManyRepository extends BaseFieldRepository
 
         $related = $this->getRelated($request, $model);
 
+        $this->link($model, $related);
+    }
+
+    /**
+     * Link two models.
+     *
+     * @param  Model $model
+     * @param  Model $related
+     * @return void
+     */
+    public function link(Model $model, Model $related)
+    {
         $attributes = $this->field->getPivotAttributes($model, $related);
         if ($this->field->sortable) {
             $attributes[$this->field->orderColumn] = $this->field->getRelationQuery($model)->count();
@@ -58,7 +70,9 @@ class BelongsToManyRepository extends BaseFieldRepository
      */
     public function destroy(CrudUpdateRequest $request, $model)
     {
-        $related = $this->getRelated($request, $model);
+        if (! $related = $this->getRelatedOrDelete($request, $model)) {
+            return;
+        }
 
         $model->{$this->field->id}()->detach($related->getKey());
     }

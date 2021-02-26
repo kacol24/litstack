@@ -5,7 +5,6 @@ namespace Ignite\Crud\Fields\Relations;
 use Closure;
 use Ignite\Crud\RelationField;
 use Ignite\Exceptions\Traceable\InvalidArgumentException as LitstackInvalidArgumentException;
-use Ignite\Page\Table\ColumnBuilder;
 use Ignite\Support\Facades\Config;
 use Ignite\Support\Facades\Crud;
 use Illuminate\Support\Arr;
@@ -43,15 +42,32 @@ class LaravelRelationField extends RelationField
     protected $casts = [];
 
     /**
+     * Repository class.
+     *
+     * @var string
+     */
+    protected $repository = null;
+
+    /**
      * Create new Field instance.
      *
-     * @param string      $id
-     * @param string      $model
-     * @param string|null $routePrefix
+     * @param  string $id
+     * @return void
      */
-    public function __construct(string $id, string $model, $routePrefix, $form)
+    public function __construct(string $id)
     {
-        parent::__construct($id, $model, $routePrefix, $form);
+        parent::__construct($id);
+    }
+
+    /**
+     * Set model class.
+     *
+     * @param  string $model
+     * @return void
+     */
+    public function setModel($model)
+    {
+        parent::setModel($model);
 
         $this->initializeRelationField();
     }
@@ -68,6 +84,8 @@ class LaravelRelationField extends RelationField
         $this->search('title');
         $this->confirm();
         $this->small(false);
+        $this->hideRelationLink(false);
+        $this->setAttribute('icons', []);
     }
 
     /**
@@ -152,14 +170,17 @@ class LaravelRelationField extends RelationField
      */
     protected function setOrderDefaults()
     {
-        $orders = $this->getRelationQuery(new $this->model())->getQuery()->getQuery()->orders;
+        $orders = $this->getRelationQuery(new $this->model())
+            ->getQuery()
+            ->getQuery()
+            ->orders;
 
         if (empty($orders)) {
             return;
         }
 
         $order = $orders[0];
-        if (method_exists($this->relation, 'getTable')) {
+        if ($this->relation && method_exists($this->relation, 'getTable')) {
             $orderColumn = str_replace($this->relation->getTable().'.', '', $order['column']);
         } else {
             $orderColumn = $order['column'];
@@ -269,6 +290,35 @@ class LaravelRelationField extends RelationField
     }
 
     /**
+     * Wether to hide the link to the relationship or not.
+     *
+     * @param  bool  $link
+     * @return $this
+     */
+    public function hideRelationLink(bool $link = true)
+    {
+        $this->setAttribute('hide_relation_link', $link);
+
+        return $this;
+    }
+
+    /**
+     * Set icon.
+     *
+     * @param  string $type
+     * @param  string $icon
+     * @return $this
+     */
+    public function icon($type, $icon)
+    {
+        $this->mergeOrSetAttribute('icons', [
+            $type => $icon,
+        ]);
+
+        return $this;
+    }
+
+    /**
      * Build relation index table.
      *
      * @param  Closure $closure
@@ -276,7 +326,7 @@ class LaravelRelationField extends RelationField
      */
     public function preview(Closure $closure)
     {
-        $builder = new ColumnBuilder;
+        $builder = new RelationColumnBuilder($this);
 
         // In order for the column builder to set a cast when creating a money
         // field, it is necessary to pass the field instance to the column builder.
@@ -439,20 +489,108 @@ class LaravelRelationField extends RelationField
             throw new InvalidArgumentException('Missing related model.');
         }
 
+        $form = $this->makeForm();
+
+        $closure($form);
+
+        $this->setAttribute('update_form', $form);
+
+        return $this;
+    }
+
+    /**
+     * Make relation form.
+     *
+     * @return RelationForm
+     */
+    protected function makeForm()
+    {
         $form = new RelationForm($this->relatedModelClass, $this);
 
         $form->setRoutePrefix($this->formInstance->getRoutePrefix());
 
         $form->registered(function ($field) {
-            $field->setAttribute('params', [
+            $field->mergeOrSetAttribute('params', [
                 'field_id'       => $this->id,
                 'child_field_id' => $field->id,
             ]);
         });
 
+        return $form;
+    }
+
+    /**
+     * Get repository.
+     *
+     * @return void
+     */
+    public function getRepository()
+    {
+        return $this->repository;
+    }
+
+    /**
+     * Get attribute by name.
+     *
+     * @param  string $name
+     * @return $this
+     */
+    public function getAttribute(string $name)
+    {
+        if ($name == 'form' && $key = request()->form_key) {
+            return $this->preview->getForm($key);
+        }
+
+        return parent::getAttribute($name);
+    }
+
+    /**
+     * Add creation form.
+     *
+     * @param  Closure $closure
+     * @return $this
+     */
+    public function create(Closure $closure)
+    {
+        $form = $this->makeForm();
+
         $closure($form);
 
-        $this->setAttribute('form', $form);
+        // $this->form(function($form) use($closure) {
+
+        // });
+        $this->setAttribute('creation_form', $form);
+
+        return $this;
+    }
+
+    /**
+     * Add create and update form.
+     *
+     * @param  Closure $closure
+     * @return $this
+     */
+    public function createAndUpdateForm(Closure $closure)
+    {
+        $this->create($closure);
+        $this->form($closure);
+
+        return $this;
+    }
+
+    /**
+     * Deletes the relation Model after unlinking the relation.
+     *
+     * @param  bool  $delete
+     * @return $this
+     */
+    public function deleteUnlinked(bool $delete = true)
+    {
+        $this->setAttribute('delete_unlinked', $delete);
+
+        $this->mergeOrSetAttribute('params', [
+            'delete_unlinked' => $delete,
+        ]);
 
         return $this;
     }

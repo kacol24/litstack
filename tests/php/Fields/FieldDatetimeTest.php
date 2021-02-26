@@ -4,7 +4,7 @@ namespace Tests\Fields;
 
 use Carbon\CarbonInterface;
 use Ignite\Crud\BaseField;
-use Ignite\Crud\Fields\Datetime;
+use Ignite\Crud\Fields\DateTime\DateTime;
 use Tests\BackendTestCase;
 use Tests\Traits\InteractsWithFields;
 
@@ -16,7 +16,7 @@ class FieldDatetimeTest extends BackendTestCase
     {
         parent::setUp();
 
-        $this->field = $this->getField(Datetime::class);
+        $this->field = $this->getField(DateTime::class);
     }
 
     /** @test */
@@ -45,26 +45,30 @@ class FieldDatetimeTest extends BackendTestCase
     }
 
     /** @test */
-    public function test_onlyDate_method()
+    public function test_minute_interval_method()
     {
-        $this->field->onlyDate();
-        $this->assertTrue($this->field->getAttribute('only_date'));
+        $this->field->minuteInterval(15);
+        $this->assertArrayHasKey('minute_interval', $this->field->getAttributes());
+        $this->assertEquals(15, $this->field->getAttribute('minute_interval'));
 
-        $this->field->onlyDate(false);
-        $this->assertFalse($this->field->getAttribute('only_date'));
+        $this->field->minuteInterval();
+        $this->assertEquals(1, $this->field->getAttribute('minute_interval'));
 
         // Assert method returns field instance.
-        $this->assertEquals($this->field, $this->field->onlyDate());
+        $this->assertEquals($this->field, $this->field->minuteInterval());
     }
 
     /** @test */
-    public function test_formatted_method()
-    {
-        $this->field->formatted('dummy_format');
-        $this->assertArrayHasKey('formatted', $this->field->getAttributes());
-        $this->assertEquals('dummy_format', $this->field->getAttribute('formatted'));
+    // public function test_disabled_hours_method()
+    // {
+    //     $this->field->disabledHours(['00', '01']);
+    //     $this->assertArrayHasKey('disabled_hours', $this->field->getAttributes());
+    //     $this->assertEquals(['00', '01'], $this->field->getAttribute('disabled_hours'));
 
-        // Assert method returns field instance.
-        $this->assertEquals($this->field, $this->field->formatted(''));
-    }
+    //     $this->field->disabledHours();
+    //     $this->assertEquals([], $this->field->getAttribute('disabled_hours'));
+
+    //     // Assert method returns field instance.
+    //     $this->assertEquals($this->field, $this->field->disabledHours());
+    // }
 }

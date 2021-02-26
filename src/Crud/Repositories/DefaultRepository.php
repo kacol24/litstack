@@ -9,6 +9,7 @@ use Ignite\Crud\Models\LitFormModel;
 use Ignite\Crud\Requests\CrudCreateRequest;
 use Ignite\Crud\Requests\CrudReadRequest;
 use Ignite\Crud\Requests\CrudUpdateRequest;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 
 class DefaultRepository extends BaseFieldRepository
@@ -29,10 +30,9 @@ class DefaultRepository extends BaseFieldRepository
     /**
      * Update model.
      *
-     * @param CrudUpdateRequest $request
-     * @param mixed             $model
-     * @param object            $payload
-     *
+     * @param  CrudUpdateRequest $request
+     * @param  mixed             $model
+     * @param  object            $payload
      * @return CrudJs
      */
     public function update(CrudUpdateRequest $request, $model, $payload)
@@ -83,7 +83,7 @@ class DefaultRepository extends BaseFieldRepository
      * Filter pivot attributes.
      *
      * @param  array $attributes
-     * @return void
+     * @return array
      */
     protected function filterPivotAttributes($attributes)
     {
@@ -108,12 +108,12 @@ class DefaultRepository extends BaseFieldRepository
     /**
      * Store new model.
      *
-     * @param CrudCreateRequest $request
-     * @param object            $payload
-     *
+     * @param  CrudCreateRequest $request
+     * @param  object            $payload
+     * @param  Model             $model
      * @return CrudJs
      */
-    public function store(CrudCreateRequest $request, $payload)
+    public function store(CrudCreateRequest $request, $payload, $model = null)
     {
         CrudValidator::validate(
             (array) $payload,
@@ -123,15 +123,21 @@ class DefaultRepository extends BaseFieldRepository
 
         $attributes = $this->formatAttributes((array) $payload, $this->form->getRegisteredFields());
 
-        if ($this->config->sortable) {
+        if ($this->configMatchesModel($model) && $this->config->sortable) {
             $attributes[$this->config->orderColumn] = $this->controller->getQuery()->count() + 1;
         }
 
-        $model = $this->controller->getModel();
-        $model = $this->controller->initialQuery()->make($attributes);
+        if (is_null($model)) {
+            $model = $this->controller->initialQuery()->make($attributes);
+        } else {
+            $model->fill($attributes);
+        }
 
         $this->fillAttributesToModel($model, (array) $payload);
-        $this->controller->fillOnStore($model);
+
+        if ($this->configMatchesModel($model)) {
+            $this->controller->fillOnStore($model);
+        }
 
         $model->save();
 
@@ -139,7 +145,27 @@ class DefaultRepository extends BaseFieldRepository
             $model->update($attributes);
         }
 
+        if ($this->config->has('show')) {
+            $this->config->show->fireEvent('created', $model);
+        }
+
         return crud($model);
+    }
+
+    /**
+     * Determines if the current config matches the model. This will not be true
+     * when a relationship model is handled.
+     *
+     * @param  mixed $model
+     * @return bool
+     */
+    protected function configMatchesModel($model)
+    {
+        if (is_null($model)) {
+            return true;
+        }
+
+        return get_class($model) == $this->config->model;
     }
 
     /**
@@ -163,9 +189,9 @@ class DefaultRepository extends BaseFieldRepository
     /**
      * Get relation model.
      *
-     * @param  Request    $request
-     * @param  mixed      $model
-     * @return Repeatable
+     * @param  Request $request
+     * @param  mixed   $model
+     * @return Model
      */
     public function getModel(Request $request, $model, $childRepository)
     {
@@ -173,8 +199,23 @@ class DefaultRepository extends BaseFieldRepository
             abort(404);
         }
 
-        return $this->field->getRelationQuery($model)
-            ->where('id', $request->relation_id)
+        if (is_null($request->relation_id)) {
+            if ($this->config->has('show')) {
+                $this->config->show->on('created', function ($related) use ($model) {
+                    $repository = $this->field->getRepository();
+                    $repository = new $repository($this->config, $this->controller, $this->form, $this->field);
+
+                    $repository->link($model, $related);
+                });
+            }
+
+            return $this->field->getRelationQuery($model)->make();
+        }
+
+        $query = $this->field->getRelationQuery($model);
+
+        return $query
+            ->where($query->qualifyColumn('id'), $request->relation_id)
             ->firstOrFail();
     }
 }

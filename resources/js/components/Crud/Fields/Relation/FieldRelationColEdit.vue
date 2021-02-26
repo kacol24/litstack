@@ -7,12 +7,14 @@
         :title="__('crud.fields.relation.edit')"
         @click="edit()"
     >
-        <lit-fa-icon icon="edit" />
+        <span v-html="icon"></span>
+
         <lit-field-relation-form
             :item="item"
             :modal-id="modalId"
             :field="field"
             :model="model"
+            :form="field.update_form"
             @update="$emit('update')"
         />
     </b-button>
@@ -24,24 +26,33 @@ export default {
     props: {
         item: {
             type: Object,
-            required: true
+            required: true,
         },
         field: {
             required: true,
-            type: Object
+            type: Object,
         },
         model: {
             require: true,
-            type: Object
-        }
+            type: Object,
+        },
     },
     beforeMount() {
         this.modalId = this.rowModalId(this.item);
     },
     data() {
         return {
-            modalId: ''
+            modalId: '',
         };
+    },
+    computed: {
+        icon() {
+            if ('edit' in this.field.icons) {
+                return this.field.icons.edit;
+            }
+
+            return '<i class="fas fa-edit"><i/>';
+        },
     },
     methods: {
         rowModalId(item) {
@@ -50,7 +61,7 @@ export default {
         edit() {
             console.log('EDIT');
             this.$bvModal.show(this.modalId);
-        }
-    }
+        },
+    },
 };
 </script>

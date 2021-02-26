@@ -4,24 +4,21 @@ namespace Ignite\Crud\Models;
 
 use Astrotomic\Translatable\Contracts\Translatable as TranslatableContract;
 use Astrotomic\Translatable\Translatable;
-use Ignite\Crud\Fields\Media\MediaField;
-use Ignite\Crud\Fields\Relations\ManyRelationField;
 use Ignite\Crud\RelationField;
-use Ignite\Support\Facades\Config;
+use Illuminate\Contracts\Support\Arrayable;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Model;
 use Spatie\MediaLibrary\HasMedia;
-use Spatie\MediaLibrary\MediaCollections\Models\Media as SpatieMedia;
 
 /**
  * The LitFormModel stores field data in as json in a column.
  */
 abstract class LitFormModel extends Model implements HasMedia, TranslatableContract
 {
-    use Traits\HasMedia,
-        Translatable,
+    use Translatable,
         Concerns\HasConfig,
         Concerns\HasFields,
-        Concerns\HasMedia;
+        Traits\HasMedia;
 
     /**
      * "value" is translatable but since non translatable fields are stored in
@@ -47,15 +44,11 @@ abstract class LitFormModel extends Model implements HasMedia, TranslatableContr
     protected $casts = ['value' => 'json'];
 
     /**
-     * Register media conversions for field.
+     * Translations array.
      *
-     * @param  SpatieMedia $media
-     * @return void
+     * @var array|null
      */
-    public function registerMediaConversions(SpatieMedia $media = null): void
-    {
-        $this->registerCrudMediaConversions($media);
-    }
+    protected $translationsArray;
 
     /**
      * Get translation attribute.
@@ -64,7 +57,11 @@ abstract class LitFormModel extends Model implements HasMedia, TranslatableContr
      */
     public function getTranslationAttribute()
     {
-        return $this->getTranslationsArray();
+        if (! is_null($this->translationsArray)) {
+            return $this->translationsArray;
+        }
+
+        return $this->translationsArray = $this->getTranslationsArray();
     }
 
     /**
@@ -255,6 +252,16 @@ abstract class LitFormModel extends Model implements HasMedia, TranslatableContr
     }
 
     /**
+     * Get field ids.
+     *
+     * @return array
+     */
+    public function getFieldIds()
+    {
+        return $this->fieldIds;
+    }
+
+    /**
      * Create a new model instance that is existing.
      *
      * @param  array       $attributes
@@ -263,15 +270,45 @@ abstract class LitFormModel extends Model implements HasMedia, TranslatableContr
      */
     public function newFromBuilder($attributes = [], $connection = null)
     {
-        $model = parent::newFromBuilder($attributes, $connection);
+        static::setModelFieldIds(
+            $model = parent::newFromBuilder($attributes, $connection)
+        );
 
-        // Set field ids to be able to check if field exists in getAttribute
-        // method.
+        return $model;
+    }
+
+    /**
+     * Set config_type attribute.
+     *
+     * @param  string $value
+     * @return void
+     */
+    public function setConfigTypeAttribute($value)
+    {
+        $this->attributes['config_type'] = $value;
+
+        static::setModelFieldIds($this);
+    }
+
+    /**
+     * Set field ids to be able to check if field exists in getAttribute method.
+     *
+     * @param  self $model
+     * @return void
+     */
+    protected static function setModelFieldIds(self $model)
+    {
+        if (! $model->config_type) {
+            return;
+        }
+
+        if (! empty($model->fieldIds)) {
+            return;
+        }
+
         $model->setFieldIds($model->fields->map(function ($field) {
             return $field->id;
         })->toArray());
-
-        return $model;
     }
 
     /**
@@ -288,15 +325,20 @@ abstract class LitFormModel extends Model implements HasMedia, TranslatableContr
                 continue;
             }
 
-            $attributes[$field->id] = $this->getFormattedFieldValue($field);
+            $value = $this->getFormattedFieldValue($field);
 
-            if ($field instanceof MediaField || $field instanceof ManyRelationField) {
-                if ($field instanceof MediaField && $field->maxFiles == 1) {
-                    continue;
-                }
-                $items = $this->getFormattedFieldValue($field);
-                $attributes["first_{$field->id}"] = $items ? $items->first() : null;
+            if ($value instanceof EloquentCollection) {
+
+                // Adding "first_..." to the attributes. This allows to show the
+                // first image of a collection for example in a repeatable preview.
+                $attributes["first_{$field->id}"] = $value ? $value->first() : null;
             }
+
+            if ($value instanceof Arrayable) {
+                $value = $value->toArray();
+            }
+
+            $attributes[$field->id] = $value;
         }
 
         return $attributes;
@@ -305,12 +347,11 @@ abstract class LitFormModel extends Model implements HasMedia, TranslatableContr
     /**
      * Modified to return relation instances for relation fields.
      *
-     * @param string $method
-     * @param array  $params
-     *
+     * @param  string $method
+     * @param  array  $params
      * @return mixed
      */
-    public function __call($method, $params = [])
+    public function __call($method, $params)
     {
         if (! in_array($method, $this->fieldIds)) {
             return parent::__call($method, $params);

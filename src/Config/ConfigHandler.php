@@ -5,8 +5,10 @@ namespace Ignite\Config;
 use BadMethodCallException;
 use Ignite\Support\Facades\Config;
 use Illuminate\Support\Str;
+use InvalidArgumentException;
 use ReflectionClass;
 use ReflectionMethod;
+use ReflectionType;
 use TypeError;
 
 class ConfigHandler
@@ -33,11 +35,25 @@ class ConfigHandler
     protected $factories = [];
 
     /**
+     * Config factory alias.
+     *
+     * @var array
+     */
+    protected $alias = [];
+
+    /**
      * Methods with their associated factories.
      *
      * @var array
      */
     protected $methodFactories = [];
+
+    /**
+     * ReflectionClass instance.
+     *
+     * @var ReflectionClass
+     */
+    protected $reflector;
 
     /**
      * Create new ConfigHandler instance.
@@ -48,8 +64,18 @@ class ConfigHandler
     public function __construct($config)
     {
         $this->config = $config;
+    }
 
-        $this->findConfigFactories();
+    /**
+     * Set a config attribute.
+     *
+     * @param  string $attribute
+     * @param  mixed  $value
+     * @return void
+     */
+    public function set($attribute, $value)
+    {
+        $this->attributes[$attribute] = $value;
     }
 
     /**
@@ -63,39 +89,102 @@ class ConfigHandler
     }
 
     /**
-     * Determines if config is an instance of the given abstract.
+     * Determine if the config is an instance of the given class name or
+     * interface.
      *
-     * @param  string $abstract
      * @return bool
      */
-    public function instanceOf($abstract)
+    public function is($class)
     {
-        return $this->config instanceof $abstract;
+        return $this->config instanceof $class;
     }
 
     /**
-     * Find factories by config depenecies.
+     * Get the config reflector.
      *
-     * @return void
+     * @return ReflectionClass
      */
-    public function findConfigFactories()
+    public function getReflector()
     {
-        $reflector = new ReflectionClass($this->config);
-        $parent = $reflector->getParentClass();
-        $uses = class_uses_recursive($this->config);
+        if ($this->reflector) {
+            return $this->reflector;
+        }
 
-        foreach (Config::factories() as $dependency => $factory) {
-            // Matching parent class.
-            if ($parent) {
-                if ($this->config instanceof $dependency) {
-                    $this->registerFactory($factory);
-                }
-            }
+        return $this->reflector = new ReflectionClass($this->config);
+    }
 
-            if (in_array($dependency, $uses)) {
-                $this->registerFactory($factory);
+    /**
+     * Get method reflector.
+     *
+     * @param  string                $name
+     * @return ReflectionMethod|null
+     */
+    public function getMethodReflector($name)
+    {
+        return collect(
+            $this->getReflector()->getMethods()
+        )->first(function (ReflectionMethod $method) use ($name) {
+            return $method->getName() == $name;
+        });
+    }
+
+    /**
+     * Determines wether the method requires the abstract as parameter at the
+     * given position.
+     *
+     * @param  string       $method
+     * @param  string|mixed $abstract
+     * @param  int          $position
+     * @return bool
+     *
+     * @throws InvalidArgumentException
+     */
+    public function methodNeeds($method, $abstract, $position = 0)
+    {
+        if (! $reflector = $this->getMethodReflector($method)) {
+            throw new InvalidArgumentException('Method not found '.$this->getNamespace()."::{$method}.");
+        }
+
+        if (! $parameter = $reflector->getParameters()[$position] ?? null) {
+            throw new InvalidArgumentException('Method '.$this->getNamespace()."::{$method} has no parameter as position [{$position}].");
+        }
+
+        if (! $type = $parameter->getType()) {
+            return false;
+        }
+
+        if ($type instanceof ReflectionType) {
+            return $this->isTypeAbstract($type, $abstract);
+        }
+
+        // ReflectionUnionType in php >= 8
+        foreach ($type->getTypes() as $type) {
+            if ($this->isTypeAbstract($type, $abstract)) {
+                return true;
             }
         }
+
+        return false;
+    }
+
+    /**
+     * Determine if the reflection type implements the given abstract.
+     *
+     * @param  ReflectionType $type
+     * @param  string         $abstract
+     * @return bool
+     */
+    protected function isTypeAbstract(ReflectionType $type, $abstract)
+    {
+        if (! $name = $type->getName()) {
+            return false;
+        }
+
+        if ($name == $abstract) {
+            return true;
+        }
+
+        return is_subclass_of($name, $abstract);
     }
 
     /**
@@ -138,6 +227,29 @@ class ConfigHandler
 
             $this->methodFactories[$method->name] = $instance;
         }
+
+        $reflector = new ReflectionClass($this->config);
+        foreach ($reflector->getMethods() as $method) {
+            if (! $alias = $instance->getAliasFor($method)) {
+                continue;
+            }
+
+            if ($alias == $method->getName()) {
+                continue;
+            }
+
+            $this->alias[$method->getName()] = $alias;
+        }
+    }
+
+    /**
+     * Get alias.
+     *
+     * @return array
+     */
+    public function getAlias()
+    {
+        return $this->alias;
     }
 
     /**
@@ -254,7 +366,7 @@ class ConfigHandler
      */
     public function methodHasFactory(string $method)
     {
-        return array_key_exists($method, $this->methodFactories);
+        return ! is_null($this->getMethodFactory($method));
     }
 
     /**
@@ -265,7 +377,11 @@ class ConfigHandler
      */
     public function getMethodFactory(string $method)
     {
-        return $this->methodFactories[$method];
+        if (array_key_exists($method, $this->alias)) {
+            $method = $this->alias[$method];
+        }
+
+        return $this->methodFactories[$method] ?? null;
     }
 
     /**
@@ -283,7 +399,11 @@ class ConfigHandler
 
         $factory = $this->getMethodFactory($method);
 
-        return $factory->handle($method, $parameters);
+        return $factory->handle(
+            $method,
+            $parameters,
+            $this->alias[$method] ?? null
+        );
     }
 
     /**

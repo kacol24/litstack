@@ -64,6 +64,7 @@ trait TestHelpers
             $class = get_class($object);
         } else {
             $class = $object;
+            $object = null;
         }
 
         $reflection = new ReflectionProperty($class, $property);

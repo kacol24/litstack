@@ -83,7 +83,7 @@ abstract class CrudController extends CrudBaseController
         $models->map(fn ($item) => $item->delete());
 
         return response()->success(
-            __lit_choice('messages.deleted_items', count($models))
+            __lit_choice('crud.messages.deleted_items', count($models))
         );
     }
 
@@ -96,7 +96,9 @@ abstract class CrudController extends CrudBaseController
     public function index(CrudReadRequest $request)
     {
         $config = $this->config->get(
-            'route_prefix', 'names', 'permissions'
+            'route_prefix',
+            'names',
+            'permissions'
         );
 
         $page = $this->config->index->bind([
@@ -123,6 +125,10 @@ abstract class CrudController extends CrudBaseController
             ->search($table->getAttribute('search'))
             ->get();
 
+        foreach ($index['items'] as $item) {
+            $item['_lit_route'] = $this->config->getRouteFor($item);
+        }
+
         $index['items'] = crud($index['items']);
 
         return $index;
@@ -136,14 +142,17 @@ abstract class CrudController extends CrudBaseController
      */
     public function create(CrudCreateRequest $request)
     {
+        $formName = $this->getFormName($request);
+
         $config = $this->config->get(
-            'show', 'names', 'permissions', 'route_prefix'
+            $formName, 'names', 'permissions', 'route_prefix'
         );
 
-        $config['form'] = $config['show'];
-        unset($config['show']);
+        $config['form_name'] = $formName;
+        $config['form'] = $config[$formName];
+        unset($config[$formName]);
 
-        $page = $this->config->show->bindToView([
+        $page = $this->config->{$formName}->bindToView([
             'model'  => new $this->model(),
             'config' => $this->config,
         ])->bindToVue([
@@ -163,13 +172,14 @@ abstract class CrudController extends CrudBaseController
     public function show(CrudReadRequest $request, ...$parameters)
     {
         $id = last($parameters);
+        $formName = $this->getFormName($request);
 
-        $this->config->show->resolveQuery(
+        $this->config->{$formName}->resolveQuery(
             $query = $this->getQuery()
         );
 
         // Now we are loading all relations from relation or media fields.
-        foreach ($this->config->show->getRegisteredFields() as $field) {
+        foreach ($this->config->{$formName}->getRegisteredFields() as $field) {
             if ($field instanceof RelationField && ! $field instanceof MediaField) {
                 $query->with($field->getRelationName());
             }
@@ -180,7 +190,7 @@ abstract class CrudController extends CrudBaseController
 
         // Append media.
         if (! $model instanceof LitFormModel) {
-            foreach ($this->config->show->getRegisteredFields() as $field) {
+            foreach ($this->config->{$formName}->getRegisteredFields() as $field) {
                 if ($field instanceof MediaField) {
                     $model->append($field->id);
                 }
@@ -189,10 +199,12 @@ abstract class CrudController extends CrudBaseController
 
         // Load config attributes.
         $config = $this->config->get(
-            'show', 'route_prefix', 'names', 'permissions',
+            $formName, 'route_prefix', 'names', 'permissions',
         );
-        $config['form'] = $config['show'];
-        unset($config['show']);
+
+        $config['form_name'] = $formName;
+        $config['form'] = $config[$formName];
+        unset($config[$formName]);
 
         // Set readonly if the user has no update permission for this crud.
         foreach ($config['form']->getRegisteredFields() as $field) {
@@ -206,7 +218,7 @@ abstract class CrudController extends CrudBaseController
             $config['preview_route'] = $this->config->previewRoute($model);
         }
 
-        $page = $this->config->show->bindToView([
+        $page = $this->config->{$formName}->bindToView([
             'model'  => $model,
             'config' => $this->config,
         ])->bindToVue([
@@ -214,10 +226,14 @@ abstract class CrudController extends CrudBaseController
             'config'     => $config,
         ]);
 
+        foreach ($page->getAppends() as $attribute) {
+            $model->append($attribute);
+        }
+
         [$previous, $next] = $this->nearSiblings($id);
 
         // Show near items.
-        $page->navigationLeft()->component('lit-crud-show-near-items')->bind([
+        $page->headerRight()->component('lit-crud-show-near-items')->bind([
             'next'         => $next,
             'previous'     => $previous,
             'route-prefix' => $this->config->routePrefix,

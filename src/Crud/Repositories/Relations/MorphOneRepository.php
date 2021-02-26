@@ -3,10 +3,10 @@
 namespace Ignite\Crud\Repositories\Relations;
 
 use Ignite\Crud\Fields\Relations\MorphOne;
-use Ignite\Crud\Repositories\BaseFieldRepository;
 use Ignite\Crud\Requests\CrudUpdateRequest;
+use Illuminate\Database\Eloquent\Model;
 
-class MorphOneRepository extends BaseFieldRepository
+class MorphOneRepository extends RelationRepository
 {
     use Concerns\ManagesRelated;
 
@@ -38,6 +38,18 @@ class MorphOneRepository extends BaseFieldRepository
     {
         $related = $this->getRelated($request, $model);
 
+        $this->link($model, $related);
+    }
+
+    /**
+     * Link two models.
+     *
+     * @param  Model $model
+     * @param  Model $related
+     * @return void
+     */
+    public function link(Model $model, Model $related)
+    {
         $morphOne = $this->field->getRelationQuery($model);
 
         $query = [
@@ -64,7 +76,9 @@ class MorphOneRepository extends BaseFieldRepository
      */
     public function destroy(CrudUpdateRequest $request, $model)
     {
-        $related = $this->getRelated($request, $model);
+        if (! $related = $this->getRelatedOrDelete($request, $model)) {
+            return;
+        }
 
         $morphOne = $this->field->getRelationQuery($model);
 

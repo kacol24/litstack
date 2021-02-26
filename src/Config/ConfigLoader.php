@@ -4,6 +4,7 @@ namespace Ignite\Config;
 
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
+use ReflectionClass;
 
 /**
  * Config singleton.
@@ -63,7 +64,7 @@ class ConfigLoader
      * @param  sring  $key
      * @return string
      */
-    public function getKey(string $key)
+    public function getKey($key)
     {
         if ($this->isKeyNamespace($key)) {
             return $this->getKeyFromNamespace($key);
@@ -81,7 +82,7 @@ class ConfigLoader
      * @param  string $key
      * @return bool
      */
-    protected function isKeyNamespace(string $key)
+    protected function isKeyNamespace($key)
     {
         return ! Str::contains($key, '.') && Str::contains($key, '\\');
     }
@@ -92,7 +93,7 @@ class ConfigLoader
      * @param  string $key
      * @return bool
      */
-    protected function isKeyPath(string $key)
+    protected function isKeyPath($key)
     {
         return ! Str::contains($key, '.') && Str::contains($key, '/');
     }
@@ -104,7 +105,7 @@ class ConfigLoader
      * @param  array  ...$params
      * @return mixed
      */
-    public function get(string $key, ...$params)
+    public function get($key, ...$params)
     {
         if (class_exists($key)) {
             $class = $key;
@@ -123,16 +124,52 @@ class ConfigLoader
             return;
         }
 
-        // Initialize new config handler.
-        $instance = new ConfigHandler(
-            // Passing params to new instance.
-            new $class(...$params)
-        );
+        $instance = $this->make($class, ...$params);
 
         // Add config to stack.
         $this->loaded[$class] = $instance;
 
         return $instance;
+    }
+
+    public function make($class, ...$params)
+    {
+        // Initialize new config handler.
+        $handler = new ConfigHandler(
+            // Passing params to new instance.
+            $config = new $class(...$params)
+        );
+
+        $this->registerConfigFactories($handler, $config);
+
+        return $handler;
+    }
+
+    /**
+     * Find factories by config depenecies.
+     *
+     * @param  ConfigHandler $handler
+     * @param  mixed         $config
+     * @return void
+     */
+    protected function registerConfigFactories($handler, $config)
+    {
+        $reflector = new ReflectionClass($config);
+        $parent = $reflector->getParentClass();
+        $uses = class_uses_recursive($config);
+
+        foreach ($this->factories() as $dependency => $factory) {
+            // Matching parent class.
+            if ($parent) {
+                if ($config instanceof $dependency) {
+                    $handler->registerFactory($factory);
+                }
+            }
+
+            if (in_array($dependency, $uses)) {
+                $handler->registerFactory($factory);
+            }
+        }
     }
 
     /**
@@ -171,7 +208,7 @@ class ConfigLoader
      * @param  string $key
      * @return string
      */
-    public function getNamespaceFromKey(string $key)
+    public function getNamespaceFromKey($key)
     {
         $name = '';
         foreach (explode('.', $key) as $part) {

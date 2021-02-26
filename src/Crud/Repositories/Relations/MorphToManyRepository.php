@@ -3,11 +3,11 @@
 namespace Ignite\Crud\Repositories\Relations;
 
 use Ignite\Crud\Fields\Relations\MorphToMany;
-use Ignite\Crud\Repositories\BaseFieldRepository;
 use Ignite\Crud\Requests\CrudUpdateRequest;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 
-class MorphToManyRepository extends BaseFieldRepository
+class MorphToManyRepository extends RelationRepository
 {
     use Concerns\ManagesRelated;
 
@@ -40,6 +40,18 @@ class MorphToManyRepository extends BaseFieldRepository
 
         $related = $this->getRelated($request, $model);
 
+        $this->link($model, $related);
+    }
+
+    /**
+     * Link two models.
+     *
+     * @param  Model $model
+     * @param  Model $related
+     * @return void
+     */
+    public function link(Model $model, Model $related)
+    {
         $morphToMany = $this->field->getRelationQuery($model);
 
         $query = [
@@ -70,10 +82,12 @@ class MorphToManyRepository extends BaseFieldRepository
 
         $morphToMany = $this->field->getRelationQuery($model);
 
-        return DB::table($morphToMany->getTable())->where([
+        DB::table($morphToMany->getTable())->where([
             $morphToMany->getRelatedPivotKeyName() => $related->{$morphToMany->getRelatedKeyName()},
             $morphToMany->getForeignPivotKeyName() => $model->{$morphToMany->getParentKeyName()},
             $morphToMany->getMorphType()           => $morphToMany->getMorphClass(),
         ])->delete();
+
+        $this->deleteIfDesired($request, $related);
     }
 }

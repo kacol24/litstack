@@ -10,6 +10,8 @@ use Ignite\Vue\Component;
 
 class CrudColumnBuilder extends ColumnBuilder
 {
+    use Traits\ColumnBuilderHasFields;
+
     /**
      * Crud config handler instance.
      *
@@ -74,7 +76,7 @@ class CrudColumnBuilder extends ColumnBuilder
             return false;
         }
 
-        return $this->config->routePrefix().'/{id}';
+        return '{_lit_route}';
     }
 
     /**
@@ -90,15 +92,15 @@ class CrudColumnBuilder extends ColumnBuilder
     /**
      * Create new action column.
      *
-     * @param  string    $title
-     * @param  string    $action
-     * @return Component
+     * @param  string          $title
+     * @param  string          $action
+     * @return Component|mixed
      */
     public function action($title, $action): ColumnContract
     {
         $wrapper = parent::action($title, $action);
 
-        last($this->columns)->on('run', RunCrudActionEvent::class);
+        $this->config->bindAction(last($this->columns));
 
         return $wrapper;
     }

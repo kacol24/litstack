@@ -1,224 +1,267 @@
 <template>
-	<b-td
-		:class="{
-			'col-sm': isSmall(col),
-			'lit-table-col': true,
-			pointer: col.link,
-			'text-right': col.text_right,
-			'text-center': col.text_center,
-			...col.classes,
-		}"
-		:style="colWidth"
-	>
-		<component
-			:is="link ? 'a' : 'span'"
-			:href="link"
-			:target="isExternal(link) ? '_blank' : ''"
-		>
-			<lit-base-component
-				v-if="col.name !== undefined"
-				:component="component"
-				:item="item"
-				:format="getColValue"
-				@reload="reload"
-				v-on="$listeners"
-			/>
+    <b-td
+        :class="{
+            'col-sm': isSmall(col),
+            'lit-table-col': true,
+            'text-right': col.text_right,
+            'text-center': col.text_center,
+            ...col.classes,
+        }"
+        :style="`${colWidth} ${getStyle(col)}`"
+    >
+        <component
+            :is="link ? 'a' : 'span'"
+            :href="link"
+            :target="isExternal(link) ? '_blank' : ''"
+        >
+            <lit-base-component
+                v-if="col.name !== undefined"
+                :component="component"
+                :item="item"
+                :format="getColValue"
+                @reload="reload"
+                v-on="$listeners"
+            />
 
-			<span v-else v-html="value" />
-		</component>
-	</b-td>
+            <span v-else v-html="value" />
+        </component>
+    </b-td>
 </template>
 
 <script>
 import { mapGetters } from 'vuex';
 export default {
-	name: 'TableCol',
-	props: {
-		item: {
-			required: true,
-			type: Object,
-		},
-		col: {
-			required: true,
-			type: Object,
-		},
-		cols: {
-			required: true,
-			type: Array,
-		},
-	},
-	data() {
-		return {
-			value: '',
-		};
-	},
-	watch: {
-		item() {
-			this.setValue();
-		},
-	},
-	beforeMount() {
-		this.setValue();
+    name: 'TableCol',
+    props: {
+        item: {
+            required: true,
+            type: Object,
+        },
+        col: {
+            required: true,
+            type: Object,
+        },
+        cols: {
+            required: true,
+            type: Array,
+        },
+    },
+    data() {
+        return {
+            value: '',
+        };
+    },
+    watch: {
+        item() {
+            this.setValue();
+        },
+    },
+    beforeMount() {
+        this.setValue();
 
-		// Can be called from parents to refresh value.
-		this.$on('refresh', this.setValue);
+        // Can be called from parents to refresh value.
+        this.$on('refresh', this.setValue);
 
-		Lit.bus.$on('languageChanged', this.setValue);
-	},
-	computed: {
-		...mapGetters(['baseURL']),
-		component() {
-			return {
-				...this.col,
-				props: {
-					...this.getColComponentProps(),
-					...this.$attrs,
-					value: this.value,
-				},
-			};
-		},
-		percentageColsCount() {
-			let count = 0;
-			for (let i = 0; i < this.cols.length; i++) {
-				let col = this.cols[i];
+        Lit.bus.$on('languageChanged', this.setValue);
+    },
+    computed: {
+        ...mapGetters(['baseURL']),
 
-				if (this.isSmall(col)) {
-					continue;
-				}
+        component() {
+            return {
+                ...this.col,
+                props: {
+                    ...this.getColComponentProps(),
+                    ...this.$attrs,
+                    value: this.value,
+                },
+            };
+        },
+        percentageColsCount() {
+            let count = 0;
+            for (let i = 0; i < this.cols.length; i++) {
+                let col = this.cols[i];
 
-				count++;
-			}
-			return count;
-		},
-		colWidth() {
-			if (this.isSmall(this.col)) {
-				return;
-			}
-			let percentage = 100;
-			if (this.percentageColsCount > 0) {
-				percentage = 100 / this.percentageColsCount;
-			}
-			return 'width: ' + percentage + '%;';
-		},
-		link() {
-			if (!this.col.link) {
-				return;
-			}
+                if (this.isSmall(col)) {
+                    continue;
+                }
 
-			let path = this._format(this.col.link, this.item);
+                count++;
+            }
+            return count;
+        },
+        colWidth() {
+            if (this.isSmall(this.col)) {
+                return;
+            }
+            let percentage = 100;
+            if (this.percentageColsCount > 0) {
+                percentage = 100 / this.percentageColsCount;
+            }
+            return 'width: ' + percentage + '%;';
+        },
+        link() {
+            if (!this.col.link) {
+                return;
+            }
 
-			if (!path.includes('//')) {
-				return `${this.baseURL}${path}`;
-			}
+            let path = this._format(this.col.link, this.item);
 
-			return path;
-		},
-	},
-	methods: {
-		isExternal(url) {
-			let domain = function(url) {
-				return url
-					.replace('http://', '')
-					.replace('https://', '')
-					.split('/')[0];
-			};
+            if (!path.includes('//')) {
+                return `${this.baseURL}${path}`;
+            }
 
-			if (!url) {
-				return false;
-			}
+            return path;
+        },
+    },
+    methods: {
+        isExternal(url) {
+            let domain = function(url) {
+                return url
+                    .replace('http://', '')
+                    .replace('https://', '')
+                    .split('/')[0];
+            };
 
-			if (!url.includes('//')) {
-				return false;
-			}
+            if (!url) {
+                return false;
+            }
 
-			return domain(location.href) !== domain(url);
-		},
-		setValue() {
-			this.value = this.getColValue(this.col, this.item);
-		},
-		getValue() {
-			this.setValue();
-			return this.value;
-		},
-		reload() {
-			this.$emit('reload');
-		},
-		getColValue(col, item) {
-			let value = '';
+            if (!url.includes('//')) {
+                return false;
+            }
 
-			if (col.value_options) {
-				value = col.value_options[item[col.value]];
+            return domain(location.href) !== domain(url);
+        },
+        setValue() {
+            this.value = this.getColValue(this.col, this.item);
+        },
+        getValue() {
+            this.setValue();
+            return this.value;
+        },
+        reload() {
+            this.$emit('reload');
+        },
+        getStyle(col) {
+            let style = '';
 
-				if (value === undefined && col.default_value) {
-					value = col.default_value;
-				}
-			} else {
-				value = col.value;
-			}
+            if (!col.style) {
+                return style;
+            }
 
-			// Regex for has {value} pattern.
-			if (/{(.*?)}/.test(value)) {
-				value = this._format(value, item);
-			} else if (item[value] !== undefined && item[value] !== null) {
-				value = item[value];
-			}
+            if (col.style_options) {
+                style = this.getOption(
+                    this.item,
+                    col.style,
+                    col.style_options,
+                    col.style_value
+                );
+            } else {
+                style = col.style;
+            }
 
-			return this.format(value);
-		},
-		format(value) {
-			if (!value) {
-				return value;
-			}
+            console.log(style);
 
-			if (this.col.regex) {
-				value = value.replace(
-					eval(this.col.regex),
-					this.col.regex_replace
-				);
-			}
+            return style;
+        },
+        getColValue(col, item) {
+            let value = '';
 
-			if (this.col.strip_html) {
-				value = value.replace(/<[^>]*>?/gm, ' ');
-			}
+            if (col.value_options) {
+                value = this.getOption(
+                    item,
+                    col.value,
+                    col.value_options,
+                    col.default_value
+                );
+            } else {
+                value = col.value;
+            }
 
-			if (this.col.max_chars) {
-				if (value.length > this.col.max_chars) {
-					value = value.substring(0, this.col.max_chars) + '...';
-				}
-			}
+            // Regex for has {value} pattern.
+            if (/{(.*?)}/.test(value)) {
+                value = this._format(value, item);
+            } else if (item[value] !== undefined && item[value] !== null) {
+                value = item[value];
+            }
 
-			return value;
-		},
-		getColComponentProps() {
-			if (!this.col.name) {
-				return {};
-			}
+            return this.format(value);
+        },
+        getOption(item, attribute, options, def) {
+            let key = item[attribute];
 
-			let compiled = {
-				'event-data': { ids: [this.item.id] },
-			};
+            if (key === true) {
+                key = 1;
+            } else if (key === false) {
+                key = 0;
+            }
 
-			for (let name in this.col.props) {
-				let prop = this.col.props[name];
-				compiled[name] = prop;
-			}
+            let value = options[key];
 
-			return compiled;
-		},
-		isSmall(col) {
-			return col.small === true;
-		},
-	},
+            if (value === undefined && def) {
+                value = def;
+            }
+
+            return value;
+        },
+        format(value) {
+            if (!value) {
+                return value;
+            }
+
+            if (this.col.regex) {
+                value = value.replace(
+                    eval(this.col.regex),
+                    this.col.regex_replace
+                );
+            }
+
+            if (this.col.strip_html) {
+                value = value.replace(/<[^>]*>?/gm, ' ');
+            }
+
+            if (this.col.max_chars) {
+                if (value.length > this.col.max_chars) {
+                    value = value.substring(0, this.col.max_chars) + '...';
+                }
+            }
+
+            return value;
+        },
+        getColComponentProps() {
+            if (!this.col.name) {
+                return {};
+            }
+
+            let compiled = {
+                'event-data': { ids: [this.item.id] },
+            };
+
+            for (let name in this.col.props) {
+                let prop = this.col.props[name];
+                compiled[name] = prop;
+            }
+
+            return compiled;
+        },
+        isSmall(col) {
+            return col.small === true;
+        },
+    },
 };
 </script>
 <style lang="scss">
 table.b-table tr td > a {
-	color: unset;
-	&:hover {
-		text-decoration: none;
-	}
+    display: inline-block;
+    width: 100%;
+    color: unset;
+    &:hover {
+        text-decoration: none;
+    }
 }
+
 .lit-col-money {
-	font-variant-numeric: tabular-nums;
+    font-variant-numeric: tabular-nums;
 }
 </style>

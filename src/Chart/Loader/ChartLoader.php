@@ -99,12 +99,12 @@ abstract class ChartLoader
     protected function getStartTimeConfig()
     {
         return [
-            'last24hours' => now()->subHours(24),
+            'last24hours' => now()->subHours(23),
             'today'       => now()->startOfDay(),
             'yesterday'   => now()->startOfDay()->subDay(),
-            'last7days'   => now()->subDays(7),
+            'last7days'   => now()->subDays(6),
             'thisweek'    => now()->startOfWeek(),
-            'last30days'  => now()->subDays(30),
+            'last30days'  => now()->subDays(29),
             'thismonth'   => now()->startOfMonth(),
             'thisyear'    => now()->startOfYear(),
         ];

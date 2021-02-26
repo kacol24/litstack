@@ -3,10 +3,12 @@
 namespace Ignite\Crud\Config;
 
 use ErrorException;
+use Ignite\Config\ConfigHandler;
 use Ignite\Crud\Config\Traits\HasCrudIndex;
 use Ignite\Crud\Config\Traits\HasCrudShow;
 use Ignite\Support\Facades\Config;
 use Ignite\Support\Facades\Crud;
+use Ignite\Vue\Component;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
@@ -14,8 +16,9 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 
 abstract class CrudConfig
 {
-    use HasCrudShow;
-    use HasCrudIndex;
+    use HasCrudShow,
+        HasCrudIndex,
+        Concerns\ManagesActions;
 
     /**
      * Controller class.
@@ -39,15 +42,63 @@ abstract class CrudConfig
     protected $modelInstance;
 
     /**
-     * Create new CrudConfig instance.
+     * Wether the model should be sortable.
      *
-     * @return void
+     * @var bool
      */
-    public function __construct()
+    public $sortable = false;
+
+    /**
+     * Get the form name for the given Model.
+     *
+     * @param  Model  $model
+     * @return string
+     */
+    public function getFormNameFor($model)
     {
-        app()->booted(function () {
-            $this->setModelInstanceFromCurrentRoute();
-        });
+        return 'show';
+    }
+
+    /**
+     * Get config handler.
+     *
+     * @return ConfigHandler
+     */
+    public function get()
+    {
+        return Config::get(static::class);
+    }
+
+    /**
+     * Get the route for the given model.
+     *
+     * @param  Model  $model
+     * @return string
+     */
+    public function getRouteFor($model)
+    {
+        $uri = implode('/', [
+            $this->get()->routePrefix(),
+            $model->getKey(),
+            $this->getRouteSuffix($this->getFormNameFor($model)),
+        ]);
+
+        return rtrim($uri, '\//');
+    }
+
+    /**
+     * Get route suffix for the given form name.
+     *
+     * @param  string $formName
+     * @return string
+     */
+    public function getRouteSuffix(string $formName)
+    {
+        if ($formName == 'show') {
+            return '';
+        }
+
+        return $formName;
     }
 
     /**
@@ -161,6 +212,15 @@ abstract class CrudConfig
     }
 
     /**
+     * Get breadcrumb.
+     *
+     * @return string
+     */
+    public function breadcrumb()
+    {
+    }
+
+    /**
      * Model singular and plural name.
      *
      * @return array
@@ -173,6 +233,27 @@ abstract class CrudConfig
             'singular' => ucfirst(Str::singular($tableName)),
             'plural'   => ucfirst($tableName),
         ];
+    }
+
+    public function createButton(): Component
+    {
+        return component('b-button')
+            ->variant('primary')
+            ->child($this->createButtonText())
+            ->prop('href', lit()->url($this->get()->routePrefix().'/create'));
+    }
+
+    /**
+     * Get create button text.
+     *
+     * @param  ConfigHandler $config
+     * @return string
+     */
+    protected function createButtonText()
+    {
+        return ucfirst(
+            __lit('base.item_create', ['item' => $this->names()['singular']])
+        );
     }
 
     /**

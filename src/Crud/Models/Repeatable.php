@@ -41,15 +41,8 @@ class Repeatable extends LitFormModel
      * @var array
      */
     protected $fillable = [
-        'form_type',
-        'config_type',
-        'field_id',
-        'model_type',
-        'model_id',
-        'type',
-        'content',
-        'order_column',
-        'value',
+        'form_type', 'config_type', 'field_id', 'model_type', 'model_id',
+        'type', 'content', 'order_column', 'value',
     ];
 
     /**
@@ -64,7 +57,7 @@ class Repeatable extends LitFormModel
      *
      * @var array
      */
-    protected $with = ['translations', 'media'];
+    protected $with = ['translations', 'media', 'model'];
 
     /**
      * Model relation.
@@ -85,6 +78,12 @@ class Repeatable extends LitFormModel
     {
         if (! $config = $this->config) {
             return;
+        }
+
+        if ($this->model instanceof self) {
+            $parentBlockField = $this->model->getForm()->findField($this->model->field_id);
+
+            return $parentBlockField->getRepeatable($this->model->type)->getForm();
         }
 
         return $config->{$this->getFormType()};
@@ -160,12 +159,11 @@ class Repeatable extends LitFormModel
     /**
      * Modified calls.
      *
-     * @param string $method
-     * @param array  $params
-     *
+     * @param  string $method
+     * @param  array  $params
      * @return mixed
      */
-    public function __call($method, $params = [])
+    public function __call($method, $params)
     {
         try {
             return parent::__call($method, $params);
